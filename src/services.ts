@@ -1,7 +1,7 @@
-import { interval, of, Subject, merge } from "rxjs"
+import { interval, of, Subject, merge, EMPTY } from "rxjs"
 import {
-    distinctUntilChanged, filter, map, mapTo, scan,
-    startWith, switchMap, throttleTime, timeInterval
+    distinctUntilChanged, map, mapTo, mergeMap, scan,
+    startWith, switchMap, tap, throttleTime, timeInterval
 } from "rxjs/operators"
 
 import { formatTime } from "utils"
@@ -19,8 +19,7 @@ const wait$ = new Subject()
 
 const doubleClick$ = wait$.pipe(
     timeInterval(),
-    map(val => val.interval <= DUBLE_CLICK ? true : false, false),
-    filter(click => click),
+    mergeMap(({ value, interval }) => interval <= DUBLE_CLICK ? of(value) : EMPTY),
     throttleTime(DUBLE_CLICK),
     mapTo(Actions.PAUSE)
 )
