@@ -1,60 +1,75 @@
-import { interval, of, Subject, merge, EMPTY } from "rxjs"
+import { EMPTY, merge, of, Subject, timer } from "rxjs";
 import {
-    distinctUntilChanged, map, mapTo, mergeMap, scan,
-    startWith, switchMap, tap, throttleTime, timeInterval
-} from "rxjs/operators"
+    map,
+    mapTo,
+    mergeMap,
+    scan,
+    startWith,
+    switchMap,
+    throttleTime,
+    timeInterval
+} from "rxjs/operators";
+import { formatTime } from "utils";
 
-import { formatTime } from "utils"
-
-const DUBLE_CLICK = 300
+const DUBLE_CLICK = 300;
 
 enum Actions {
     START,
     PAUSE,
-    RESET
+    RESET,
 }
 
-const action$ = new Subject<Actions>()
-const wait$ = new Subject()
+const actionSubject$ = new Subject<Actions>();
+const waitActionSubject$ = new Subject<Actions>();
 
-const doubleClick$ = wait$.pipe(
+const waitAction$ = waitActionSubject$.pipe(
     timeInterval(),
-    mergeMap(({ value, interval }) => interval <= DUBLE_CLICK ? of(value) : EMPTY),
-    throttleTime(DUBLE_CLICK),
-    mapTo(Actions.PAUSE)
-)
+    mergeMap(({ value, interval }) =>
+        interval <= DUBLE_CLICK ? of(value) : EMPTY
+    ),
+    throttleTime(DUBLE_CLICK)
+);
 
-const timer$ = merge(
-    action$,
-    doubleClick$
-).pipe(
-    distinctUntilChanged(),
-    switchMap(action => {
+const action$ = merge(actionSubject$, waitAction$);
+
+const timer$ = action$.pipe(
+    startWith(Actions.PAUSE),
+    switchMap((action) => {
         switch (action) {
-            case Actions.RESET: return of(-1)
-            case Actions.START: return interval(1000).pipe(mapTo(1))
-            case Actions.PAUSE: return of(0)
+            case Actions.RESET:
+                return of(-1);
+            case Actions.START:
+                return timer(1000, 1000).pipe(mapTo(1));
+            case Actions.PAUSE:
+                return of(0);
         }
     }),
-    startWith(0),
-    scan((time, inc) => inc < 0 ? 0 : time + inc),
+    scan((time, inc) => {
+        if (inc === 0) {
+            return time
+        } else if (inc > 0) {
+            return time + 1
+        } else {
+            return 0
+        }
+    }),
     map(formatTime)
-)
+);
 
 export const timerService = {
     observable: () => timer$,
     start: () => {
-        action$.next(Actions.START)
+        actionSubject$.next(Actions.START);
     },
     stop: () => {
-        action$.next(Actions.PAUSE)
-        action$.next(Actions.RESET)
+        actionSubject$.next(Actions.PAUSE);
+        actionSubject$.next(Actions.RESET);
     },
     reset: () => {
-        action$.next(Actions.RESET)
-        action$.next(Actions.START)
+        actionSubject$.next(Actions.RESET);
+        actionSubject$.next(Actions.START);
     },
     wait: () => {
-        wait$.next()
-    }
-}
+        waitActionSubject$.next(Actions.PAUSE);
+    },
+};
